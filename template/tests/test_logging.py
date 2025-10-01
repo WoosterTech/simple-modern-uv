@@ -1,0 +1,53 @@
+import logging
+import os
+from typing import TYPE_CHECKING, Protocol
+
+import pytest
+
+from {{ package_module }} import logging_config
+from {{ package_module }}.settings import settings
+
+if TYPE_CHECKING:
+    from _pytest.monkeypatch import MonkeyPatch
+
+class SettingsProtocol(Protocol):
+    debug: bool
+    log_level: str | None
+    def default_log_level(self) -> int: ...
+
+@pytest.fixture(autouse=True)
+def clear_env(monkeypatch: MonkeyPatch):
+    """Clear LOG_LEVEL env var before each test."""
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    monkeypatch.delenv("DEBUG", raising=False)
+
+def test_default_level_info():
+    """Without overrides, should default to INFO."""
+    s: SettingsProtocol = Settings()
+    assert s.default_log_level == logging.INFO
+
+def test_debug_env_sets_debug(monkeypatch: MonkeyPatch):
+    monkeypatch.setenv("DEBUG", "true")
+    s: SettingsProtocol = Settings()
+    assert s.default_log_level == logging.DEBUG
+
+def test_loglevel_env_override(monkeypatch: MonkeyPatch):
+    """LOGLEVEL overrides both default and DEBUG."""
+    monkeypatch.setenv("DEBUG", "false")
+    monkeypatch.setenv("LOG_LEVEL", "TRACE")
+    s: SettingsProtocol = Settings()
+    # TRACE resolves to 5
+    assert getattr(logging, s.log_level.upper()) == 5
+
+
+def test_setup_logging_trace_level(monkeypatch: MonkeyPatch, caplog):
+    """TRACE level works and produces output."""
+    monkeypatch.setenv("LOG_LEVEL", "TRACE")
+
+    logging_config.setup_logging()  # pyright: ignore[reportUnknownMemberType]
+    log = logging.getLogger("test")
+
+    with caplog.at_level(logging_config.TRACE_LEVEL_NUM):
+        log.trace("trace message")
+
+    assert "trace message" in caplog.text

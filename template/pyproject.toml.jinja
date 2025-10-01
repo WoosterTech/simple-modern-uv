@@ -38,6 +38,7 @@ classifiers = [
 # ---- Main dependencies ----
 
 dependencies = [
+    "pydantic-settings>=2.11.0",
 ]
 
 
@@ -57,7 +58,7 @@ dev = [
 
 [project.scripts]
 # Add script entry points here:
-{{ package_name }} = "{{ package_module }}:cli"
+{{ package_name }} = "{{ package_module }}.{{ package_module }}:cli"
 
 
 # ---- Build system ----
