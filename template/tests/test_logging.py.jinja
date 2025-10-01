@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Protocol
 import pytest
 
 from {{ package_module }} import logging_config
-from {{ package_module }}.settings import settings
+from {{ package_module }}.settings import Settings
 
 if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
