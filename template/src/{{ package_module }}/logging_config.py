@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from importlib.util import find_spec
 from types import TracebackType
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias, cast, final
 
 from .settings import settings
 
@@ -53,6 +53,12 @@ def trace(
 
 
 logging.Logger.trace = trace  # pyright: ignore[reportAttributeAccessIssue]
+
+if TYPE_CHECKING:
+
+    @final
+    class MyLogger(logging.Logger):
+        trace = trace
 
 
 @dataclass
@@ -121,6 +127,7 @@ def setup_logging(rich_tracebacks: bool = True) -> None:
             return
 
         from rich.logging import RichHandler
+        from rich.theme import Theme
 
         console_theme = Theme({"logging.level.trace": "dim"})
         _console.configure(theme=console_theme)
@@ -168,7 +175,7 @@ def get_logger(name: str) -> logging.Logger:
     if not _configured:
         setup_logging()
 
-    return logging.getLogger(name)
+    return cast("MyLogger", logging.getLogger(name))
 
 
 # ---- Utility for custom levels --------------------------------------------
