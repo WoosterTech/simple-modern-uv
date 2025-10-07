@@ -1,6 +1,5 @@
 import logging
-import os
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -10,10 +9,6 @@ from {{ package_module }}.settings import Settings
 if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
 
-class SettingsProtocol(Protocol):
-    debug: bool
-    log_level: str | None
-    def default_log_level(self) -> int: ...
 
 @pytest.fixture(autouse=True)
 def clear_env(monkeypatch: MonkeyPatch):
@@ -21,21 +16,24 @@ def clear_env(monkeypatch: MonkeyPatch):
     monkeypatch.delenv("LOG_LEVEL", raising=False)
     monkeypatch.delenv("DEBUG", raising=False)
 
+
 def test_default_level_info():
     """Without overrides, should default to INFO."""
-    s: SettingsProtocol = Settings()
+    s = Settings()
     assert s.default_log_level == logging.INFO
+
 
 def test_debug_env_sets_debug(monkeypatch: MonkeyPatch):
     monkeypatch.setenv("DEBUG", "true")
-    s: SettingsProtocol = Settings()
+    s = Settings()
     assert s.default_log_level == logging.DEBUG
+
 
 def test_loglevel_env_override(monkeypatch: MonkeyPatch):
     """LOGLEVEL overrides both default and DEBUG."""
     monkeypatch.setenv("DEBUG", "false")
     monkeypatch.setenv("LOG_LEVEL", "TRACE")
-    s: SettingsProtocol = Settings()
+    s = Settings()
     # TRACE resolves to 5
     assert getattr(logging, s.log_level.upper()) == 5
 

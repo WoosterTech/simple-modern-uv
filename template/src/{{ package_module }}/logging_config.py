@@ -6,6 +6,7 @@ from importlib.util import find_spec
 from types import TracebackType
 from typing import TYPE_CHECKING, TypeAlias, cast, final
 
+from . import TRACE_LEVEL
 from .settings import settings
 
 if TYPE_CHECKING:
@@ -13,8 +14,8 @@ if TYPE_CHECKING:
     from rich.theme import Theme
 
 # ---- Custom TRACE level ----------------------------------------------------
-TRACE_LEVEL_NUM = 5
-logging.addLevelName(TRACE_LEVEL_NUM, "TRACE")
+TRACE_LEVEL_NAME, TRACE_LEVEL_NUM = TRACE_LEVEL
+logging.addLevelName(TRACE_LEVEL_NUM, TRACE_LEVEL_NAME)
 
 _SysExcInfoType: TypeAlias = (
     tuple[type[BaseException], BaseException, TracebackType | None] | tuple[None, None, None]
@@ -109,12 +110,10 @@ def setup_logging(rich_tracebacks: bool = True) -> None:
     global _configured
 
     # Resolve level: LOG_LEVEL env > settings.default_log_level
-    level_name = settings.log_level.upper() if settings.log_level else None
-    level: int = (
-        getattr(logging, level_name, settings.default_log_level)
-        if level_name
-        else settings.default_log_level
-    )
+    if (level_name := settings.log_level) is not None:
+        level: int = logging.getLevelNamesMapping()[level_name]
+    else:
+        level = settings.default_log_level
 
     root = logging.getLogger()
     root.setLevel(level)
@@ -162,7 +161,7 @@ def setup_logging(rich_tracebacks: bool = True) -> None:
     _configured = True
 
 
-def get_logger(name: str) -> logging.Logger:
+def get_logger(name: str) -> "MyLogger":
     """
     Get a logger with the specified name.
 
