@@ -1,0 +1,3 @@
+# Ignore the reference directory when generating projects
+reference/
+scripts/
