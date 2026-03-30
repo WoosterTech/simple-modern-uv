@@ -2,15 +2,15 @@
 
 _min_copier_version: "9.4.0"
 _subdirectory: template
-_message_after_copy: | 
+_message_after_copy: |
     Your package template has been copied!
 
     Remember to look for any unfilled `changeme` strings and confirm the license!
     By default this template uses MIT license.
-    See `license` in pyproject.yaml and update the LICENSE file. 
+    See `license` in pyproject.yaml and update the LICENSE file.
 
     Next steps:
-    
+
     cd PROJECT
     git init
     # Make license or other initial adjustments if needed.
@@ -23,13 +23,24 @@ _message_after_copy: |
 
 package_name:
     type: str
-    help: What is the package name? (This will be the GitHub repo and PyPI package name, so use CamelCase, dash-case, or snake_case. This is the only required field.)
+    help: >-
+        What is the package name? (This will be the GitHub repo and PyPI package name, so use CamelCase, dash-case, or snake_case. Example: MyPackageName. This is the only required field.)
     default: changeme
 
 package_module:
     type: str
-    help: Package module name? (This is the Python module, so use snake_case. Or press enter to fill in later.)
-    default: changeme
+    help: Package module name? (This is the Python module, so use snake_case. Default derives from package_name, e.g. MyPackageName -> my_package_name. Or press enter to fill in later.)
+    default: "{{ package_name | regex_replace('([a-z0-9])([A-Z])', '\\1_\\2') | regex_replace('[\\s\\-]+', '_') | lower }}"
+
+package_cli_name:
+    type: str
+    help: Package CLI name? (This is the command line interface name, so use dash-case. Default derives from package_name, e.g. MyPackageName -> my-package-name. Or press enter to fill in later.)
+    default: "{{ package_name | regex_replace('([a-z0-9])([A-Z])', '\\1-\\2') | regex_replace('[\\s_]+', '-') | lower }}"
+
+package_env_prefix:
+    type: str
+    help: Package environment variable prefix? (This is the prefix for any environment variables, so use uppercase snake case. Default derives from package_name, e.g. MyPackageName -> MY_PACKAGE_NAME. Or press enter to fill in later.)
+    default: "{{ package_name | regex_replace('([a-z0-9])([A-Z])', '\\1_\\2') | regex_replace('[\\s\\-]+', '_') | upper }}"
 
 package_description:
     type: str
@@ -50,3 +61,16 @@ package_github_org:
     type: str
     help: Package GitHub org or username? (Press enter to fill in later.)
     default: changeme
+
+license:
+    type: str
+    help: License? (Default is MIT.)
+    choices:
+      - MIT
+      - none
+    default: MIT
+
+copyright_year:
+    type: str
+    help: Copyright year? (Defaults to current year.)
+    default: "{{ '%Y' | strftime }}"

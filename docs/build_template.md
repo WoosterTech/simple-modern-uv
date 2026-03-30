@@ -7,11 +7,11 @@ Uses a default `BuildConfig` to replace placeholder values with Jinja2 template 
 Defaults to processing `reference/` into `template/`.
 
 Currently replaces:
-- PackageName -&gt; {{ package_name }}
-- package_module -&gt; {{ package_module }}
-- short description -&gt; {{ package_description }}
-- your name -&gt; {{ package_author_name }}
-- your.email@example.com -&gt; {{ package_author_email }}
+- PackageName → {{ package_name }}
+- package_module → {{ package_module }}
+- short description → {{ package_description }}
+- your name → {{ package_author_name }}
+- your.email@example.com → {{ package_author_email }}
 
 **Usage**:
 
@@ -24,6 +24,7 @@ $ build-template [OPTIONS]
 * `--source-dir DIRECTORY`: The source directory to process.
 * `--destination-dir DIRECTORY`: The destination directory for the processed templates.
 * `--dry-run`: Perform a dry run without writing files.
+* `-q, --quiet`: Suppress prompts. Will force creation without asking for permission.
 * `--install-completion`: Install completion for the current shell.
 * `--show-completion`: Show completion for the current shell, to copy it or customize the installation.
 * `--help`: Show this message and exit.

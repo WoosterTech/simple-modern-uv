@@ -17,14 +17,24 @@ interface and `rich` for enhanced console output.
 
 To update docs:
 
+**Windows:**
+
 ```bash
-uv run typer scripts/build_template.py utils docs --output docs/build_template.md"""
+PYTHONUTF8=1 uv run typer scripts/build_template.py utils docs --output docs/build_template.md
+```
+
+**Non-Windows:**
+
+```bash
+uv run typer scripts/build_template.py utils docs --output docs/build_template.md
+```
+"""
 
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, cast, override
+from typing import TYPE_CHECKING, Annotated, Self, cast, override
 
 import typer
 from rich.console import Console
@@ -42,7 +52,7 @@ console = Console()
 class Variable:
     text: str
     variable: str
-    validators: Callable[[str], bool] | Iterable[Callable[[str], bool]] | None = None
+    validators: Callable[[str], str] | Iterable[Callable[[str], str]] | None = None
 
     @override
     def __str__(self) -> str:
@@ -52,25 +62,52 @@ class Variable:
         if self.validators:
             if isinstance(self.validators, Iterable):
                 for validator in self.validators:
-                    if not validator(self.text):
-                        raise ValueError(f"Validation failed for {self.variable}: {self.text}")
+                    try:
+                        self.text = validator(self.text)
+                    except ValueError as e:
+                        raise ValueError(
+                            f"Validation failed for {self.variable}: {self.text}"
+                        ) from e
             elif callable(self.validators):
-                if not self.validators(self.text):
-                    raise ValueError(f"Validation failed for {self.variable}: {self.text}")
+                try:
+                    self.text = self.validators(self.text)
+                except ValueError as e:
+                    raise ValueError(f"Validation failed for {self.variable}: {self.text}") from e
 
 
-def email_validator(email: str) -> bool:
+def email_validator(email: str) -> str:
     pattern = r"^[^@]+@[^@]+\.[^@]+$"
-    return re.match(pattern, email) is not None
+    matches = re.match(pattern, email)
+    if matches is None:
+        raise ValueError(f"Invalid email address: {email}")
+    return matches.group(0)
+
+
+def identifier_validator(identifier: str) -> str:
+    identifier = identifier.strip()
+    if not identifier.isidentifier():
+        raise ValueError(f"Invalid identifier: {identifier}")
+    return identifier
+
+
+def uppercase_validator(value: str) -> str:
+    return value.upper()
+
+
+def not_blank_validator(value: str) -> str:
+    if not value.strip():
+        raise ValueError("Value cannot be blank")
+    return value
 
 
 PACKAGE_NAME = Variable(
-    text="PackageName", variable="package_name", validators=lambda v: v.isidentifier()
+    text="PackageName", variable="package_name", validators=identifier_validator
 )
 PACKAGE_MODULE = Variable(text="package_module", variable="package_module")
 PACKAGE_DESCRIPTION = Variable(text="short description", variable="package_description")
+PACKAGE_ENV_PREFIX = Variable(text="PackageEnvPrefix", variable="package_env_prefix")
 AUTHOR_NAME = Variable(
-    text="your name", variable="package_author_name", validators=lambda v: bool(v.strip())
+    text="your name", variable="package_author_name", validators=not_blank_validator
 )
 AUTHOR_EMAIL = Variable(
     text="your.name@example.com", variable="package_author_email", validators=email_validator
@@ -83,6 +120,7 @@ class JinjaPath(Path):
 
     is_jinja_template: bool
 
+    @override
     def __new__(cls, *args: "StrPath") -> "JinjaPath":
         instance = super().__new__(cls, *args)
         instance.is_jinja_template = False
@@ -90,14 +128,6 @@ class JinjaPath(Path):
 
     def mark_as_jinja(self) -> None:
         self.is_jinja_template = True
-
-    @override
-    def iterdir(self):
-        """Override iterdir to return JinjaPath objects with default is_jinja_template."""
-        for child in super().iterdir():
-            jinja_child = JinjaPath(child)
-            # jinja_child.is_jinja_template is already False from __new__
-            yield jinja_child
 
     @override
     def write_text(
@@ -111,10 +141,10 @@ class JinjaPath(Path):
         return super().write_text(data, encoding=encoding, errors=errors, newline=newline)
 
     @override
-    def with_suffix(self, suffix: str) -> "JinjaPath":
+    def with_suffix(self, suffix: str) -> Self:
         if self.is_jinja_template and not suffix.endswith(".jinja"):
             suffix += ".jinja"
-        return cast(JinjaPath, super().with_suffix(suffix))
+        return super().with_suffix(suffix)
 
     @override
     def __str__(self) -> str:
@@ -130,15 +160,65 @@ class BuildConfig:
     reference_author: Variable = field(default_factory=lambda: AUTHOR_NAME)
     reference_email: Variable = field(default_factory=lambda: AUTHOR_EMAIL)
     reference_github_org: Variable = field(default_factory=lambda: PACKAGE_GITHUB_ORG)
+    reference_env_prefix: Variable = field(default_factory=lambda: PACKAGE_ENV_PREFIX)
     template_directory: Path = field(default_factory=lambda: Path("template"))
 
     @property
     def as_dict(self) -> dict[str, str]:
+        """Convert the BuildConfig dataclass to a dictionary mapping placeholder text to Jinja variable strings.
+
+        This method iterates over the dataclass fields, checks if they are instances of the Variable class, and constructs a dictionary where the keys are the original placeholder texts and the values are the corresponding Jinja variable strings.
+
+        Returns:
+            dict[str, str]: A dictionary mapping placeholder texts to Jinja variable strings.
+        """
         return {
             value.text: str(value)
             for _, value in self.__dict__.items()  # pyright: ignore[reportAny]
             if isinstance(value, Variable)
         }
+
+
+def replace_conditional(match: re.Match[str]) -> str:
+    """Replace a matched conditional block with Jinja templating.
+
+    The regex pattern captures:
+    - indent1: The indentation of the if statement
+    - condition: The condition inside backticks
+    - content_block: The content between the if and endif statements
+    - indent2: The indentation of the endif statement
+    This function reconstructs the block using Jinja syntax while preserving indentation.
+
+    The function is designed to be used with `re.sub` to replace all occurrences of the pattern in the content.
+
+    The regex pattern must include named groups for "indent1", "condition", "content_block", and "indent2" for this function to work correctly.
+
+    Examples:
+        >> Input:
+        ```
+        # if `condition`
+        some content
+        # endif
+        ```
+        >> Output:
+        ```
+        {% if condition %}
+        some content
+        {% endif %}
+        ```
+
+    Args:
+        match: A regex match object containing the captured groups for the conditional block.
+
+    Returns: A string with the conditional block replaced by Jinja templating.
+    """
+    indent1 = match.group("indent1")  # Indentation of the if statement
+    condition = match.group("condition")  # The condition inside backticks
+    content_block = match.group("content_block")  # The content between if and endif
+    indent2 = match.group("indent2")  # Indentation of the endif statement
+
+    # Use the same indentation as the original if statement
+    return f"{indent1}{{% if {condition} %}}\n{content_block}{indent2}{{% endif %}}"
 
 
 class Converter:
@@ -161,11 +241,58 @@ class Converter:
     def template_directory(self) -> Path:
         return self.config.template_directory
 
+    def _convert_commented_conditionals(self, content: str) -> tuple[str, bool]:
+        """Convert commented conditionals to Jinja templating.
+
+        Converts patterns like:
+        ```
+        # if `condition`
+        some content
+        # endif
+        ```
+
+        To:
+        ```
+        {% if condition %}
+        some content
+        {% endif %}
+        ```
+        """
+        original_content = content
+
+        # Pattern to match commented conditionals
+        # Matches: # if `condition` ... # endif (with content in between)
+        pattern = r"^(?P<indent1>\s*)# if `(?P<condition>[^`]+)`\s*$\n(?P<content_block>(?:(?!^\s*# endif\s*$).*\n?)*?)^(?P<indent2>\s*)# endif\s*$"
+
+        content = re.sub(pattern, replace_conditional, content, flags=re.MULTILINE)
+
+        return content, content != original_content
+
     def _replace_content(self, content: str) -> tuple[str, bool]:
         original_content = content
-        for old_value, new_value in self.template_map.items():
-            content = content.replace(old_value, new_value)
-        return content, content != original_content
+
+        # First, convert commented conditionals to Jinja templating
+        content, conditionals_modified = self._convert_commented_conditionals(content)
+
+        template_map = self.template_map
+        # console.log(f"Template map for variable replacements: {template_map}")
+
+        # Then, do the normal variable replacements
+        for old_value, new_value in template_map.items():
+            replacement_count = content.count(old_value)
+            if replacement_count:
+                occurrences_text = "occurrence" if replacement_count == 1 else "occurrences"
+                console.log(
+                    f"Replacing {replacement_count} {occurrences_text} of [cyan]'{old_value}'[/cyan] with [cyan]'{new_value}'[/cyan]",
+                    style="green",
+                )
+                content = content.replace(old_value, new_value)
+
+        # Check if variable replacements modified the content
+        variable_replacements_modified = content != original_content
+
+        # Return True if either operation modified the content
+        return content, conditionals_modified or variable_replacements_modified
 
     def _sync_file(self, src_path: Path, dest_path: JinjaPath, *, dry_run: bool = False) -> None:
         content = src_path.read_text(encoding=TEXT_ENCODING)
@@ -178,9 +305,31 @@ class Converter:
         if not dry_run:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             _ = dest_path.write_text(content, encoding=TEXT_ENCODING)
-            console.print(f"[green]Processed:[/green] {src_path} -> {dest_path}")
+            console.print(
+                f"[green]Processed:[/green] [repr.filename]{src_path}[/repr.filename] [bold cyan]→[/bold cyan] [repr.filename]{dest_path}[/repr.filename]"
+            )
         else:
-            console.print(f"[yellow]Dry run:[/yellow] Would write to {dest_path}")
+            console.print(
+                f"[yellow]Dry run:[/yellow] Would write to [repr.filename]{dest_path}[/repr.filename]"
+            )
+
+    def _process_file(self, src_path: Path, relative_dir: Path, *, dry_run: bool = False) -> None:
+        rel_path = orig_rel_path = JinjaPath(relative_dir / src_path.name)
+
+        for old_value, new_value in self.template_map.items():
+            rel_path_str = str(rel_path).replace(old_value, new_value)
+            rel_path = JinjaPath(rel_path_str)
+
+        dest_path = JinjaPath(self.template_directory / rel_path)
+        if rel_path.name != orig_rel_path.name:
+            dest_path.mark_as_jinja()
+
+        try:
+            self._sync_file(src_path, dest_path, dry_run=dry_run)
+        except UnicodeDecodeError:
+            console.print(
+                f"[red]Error processing {src_path}: Not a text file or invalid encoding.[/red]"
+            )
 
     def _process_dir(self, dir_path: Path, *, dry_run: bool = False):
         dir_path = JinjaPath(dir_path)
@@ -191,17 +340,7 @@ class Converter:
             if src_path.is_dir():
                 self._process_dir(src_path, dry_run=dry_run)
             elif src_path.is_file():
-                rel_path = orig_rel_path = JinjaPath(relative_dir / src_path.name)
-
-                for old_value, new_value in self.template_map.items():
-                    rel_path_str = str(rel_path).replace(old_value, new_value)
-                    rel_path = JinjaPath(rel_path_str)
-
-                dest_path = JinjaPath(self.template_directory / rel_path)
-                if rel_path.name != orig_rel_path.name:
-                    dest_path.mark_as_jinja()
-
-                self._sync_file(src_path, dest_path, dry_run=dry_run)
+                self._process_file(src_path, relative_dir, dry_run=dry_run)
 
     def process(self, path: Path, *, dry_run: bool = False) -> None:
         if not path.exists():
@@ -224,7 +363,7 @@ def _empty_directory(directory: Path, *, dry_run: bool = False) -> None:
     if directory.exists() and directory.is_dir():
         for item in directory.iterdir():
             if item.is_dir():
-                _empty_directory(item)
+                _empty_directory(item, dry_run=dry_run)
                 item.rmdir()
             else:
                 item.unlink()
@@ -249,7 +388,15 @@ def build_template(
         ),
     ] = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Perform a dry run without writing files.")
+        bool, typer.Option("-d", "--dry-run", help="Perform a dry run without writing files.")
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "-q",
+            "--quiet",
+            help="Suppress prompts. Will force creation without asking for permission.",
+        ),
     ] = False,
 ):
     """Build the template directory from the reference directory.
@@ -259,11 +406,11 @@ def build_template(
     Defaults to processing `reference/` into `template/`.
 
     Currently replaces:
-    - PackageName -> {{ package_name }}
-    - package_module -> {{ package_module }}
-    - short description -> {{ package_description }}
-    - your name -> {{ package_author_name }}
-    - your.email@example.com -> {{ package_author_email }}
+    - PackageName → {{ package_name }}
+    - package_module → {{ package_module }}
+    - short description → {{ package_description }}
+    - your name → {{ package_author_name }}
+    - your.email@example.com → {{ package_author_email }}
     """
     source_dir = source_dir or Path("reference")
 
@@ -277,10 +424,14 @@ def build_template(
     destination_dir = config.template_directory
 
     if destination_dir.exists():
-        console.print(f"[yellow]Warning: The directory {destination_dir} already exists.[/yellow]")
-        if not typer.confirm("Do you want to continue and overwrite its contents?"):
-            console.print("[red]Operation cancelled by user.[/red]")
-            raise typer.Exit(code=1)
+        if not quiet:
+            console.print(
+                f"[yellow]Warning: The directory {destination_dir} already exists.[/yellow]"
+            )
+            if not typer.confirm("Do you want to continue and overwrite its contents?"):
+                console.print("[red]Operation cancelled by user.[/red]")
+                raise typer.Exit(code=1)
+        console.print(f"{console_prefix}Emptying existing directory: {destination_dir}")
         _empty_directory(destination_dir, dry_run=dry_run)
 
     console.rule(
