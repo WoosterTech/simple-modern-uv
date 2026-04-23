@@ -17,6 +17,8 @@ select = [
   # "Q" # https://docs.astral.sh/ruff/rules/#flake8-quotes-q
   # "COM" # https://docs.astral.sh/ruff/rules/#flake8-commas-com
   # "SIM", # https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
+  "UP",  # https://docs.astral.sh/ruff/rules/#pyupgrade-up
+  "TC",  # https://docs.astral.sh/ruff/rules/#flake8-type-checking-tc
 ]
 ignore = [
   # Disable some rules that are overly pedantic. Add/remove as desired:
@@ -42,3 +44,4 @@ ignore = [
 
 [lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "typer.Typer"]
+quote-annotations = true
