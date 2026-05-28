@@ -13,12 +13,25 @@ dependencies = [
 [dependency-groups]
 dev = [
   "basedpyright>=1.38.4",
+  "commitizen>=4.16.2",
+  "prek>=0.4.3",
   "pydantic-settings>=2.11.0",
   "pytest>=8.4.2",
   "rich>=14.1.0",
   "ruff>=0.13.2",
   "typer>=0.19.2",
 ]
+docs = [
+  "zensical>=0.0.43",
+]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+version_scheme = "pep440"
+version_provider = "uv"
+update_changelog_on_bump = true
+major_version_zero = true
 
 [tool.ruff]
 line-length = 100
