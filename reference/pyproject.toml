@@ -30,6 +30,7 @@ classifiers = [
 # ---- Main dependencies ----
 dependencies = [
   "pydantic-settings>=2.11.0",
+  "rich>=14.0.0",
   "typer>=0.24.1",
 ]
 dynamic = ["version"]
@@ -48,8 +49,6 @@ PackageName = "package_module.package_module:cli"
 # Dynamic versioning from:
 # https://github.com/ninoseki/uv-dynamic-versioning/
 
-# ---- Dev dependencies ----
-
 [dependency-groups]
 dev = [
   "basedpyright>=1.31.0",
@@ -65,7 +64,7 @@ dev = [
   "ruff>=0.11.9",
 ]
 docs = [
-    "zensical>=0.0.43",
+  "zensical>=0.0.43",
 ]
 
 [build-system]
@@ -76,6 +75,10 @@ build-backend = "hatchling.build"
 # Add here as needed:
 # ignore-words-list = "foo,bar"
 # skip = "foo.py,bar.py"
+
+# ---- Dev dependencies ----
+[tool.deptry]
+extend_exclude = ["src/package_module/devtools\\.py"]
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
