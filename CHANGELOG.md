@@ -1,3 +1,13 @@
+## v0.3.5 (2026-05-28)
+
+### Feat
+
+- **deptry**: add configuration to have deptry ignore devtools cli module
+
+### Fix
+
+- **prek.toml**: build template based on changes made in previous version that weren't built
+
 ## v0.3.4 (2026-05-28)
 
 ### Fix
