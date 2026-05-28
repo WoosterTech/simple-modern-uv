@@ -8,7 +8,7 @@ ci = {
   submodules = false
 }
 default_stages = ["pre-commit"]
-exclude = "(tests/.*"
+exclude = "(tests)/.*"
 default_language_version.python = "3.12"
 
 [[repos]]
