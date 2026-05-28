@@ -1,3 +1,9 @@
+## v0.3.4 (2026-05-28)
+
+### Fix
+
+- **prek.toml**: add missing closing parenthesis to exclude key
+
 ## v0.3.3 (2026-05-28)
 
 ### Feat
